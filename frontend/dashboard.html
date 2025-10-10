@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - App Finanças</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #34495e;
+            --accent-color: #1abc9c;
+            --danger-color: #e74c3c;
+            --warning-color: #f39c12;
+            --light-gray: #ecf0f1;
+            --background-color: #f8f9fa;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--background-color); color: var(--secondary-color); margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        section { background-color: #fff; border-radius: 8px; padding: 20px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h1, h2, h3 { color: var(--primary-color); }
+        h1 { font-weight: 300; letter-spacing: 1px;}
+        h2 { border-bottom: 2px solid var(--light-gray); padding-bottom: 10px; margin-top: 0;}
+        form { display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; }
+        input, select, button { padding: 10px; font-size: 1em; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
+        input:focus, select:focus { border-color: var(--accent-color); outline: none; }
+        button { cursor: pointer; border: none; font-weight: bold; color: white; transition: background-color 0.3s, transform 0.2s; }
+        button:hover { transform: translateY(-2px); }
+        .btn-primary { background-color: var(--accent-color); }
+        .btn-primary:hover { background-color: #16a085; }
+        .btn-danger { background-color: var(--danger-color); }
+        .btn-danger:hover { background-color: #c0392b; }
+        .btn-warning { background-color: var(--warning-color); }
+        .btn-warning:hover { background-color: #d35400; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px 15px; border-bottom: 1px solid var(--light-gray); text-align: left; }
+        th { background-color: var(--primary-color); color: white; font-weight: 500; }
+        tr:nth-child(even) { background-color: #fdfdfd; }
+        .action-buttons { display: flex; gap: 10px; }
+        .action-buttons button { padding: 5px 10px; font-size: 0.9em; }
+        .expense { color: var(--danger-color); font-weight: bold; }
+        .income { color: var(--accent-color); font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Meu Dashboard Financeiro</h1>
+            <button id="logoutButton" class="btn-danger">Deslogar</button>
+        </header>
+
+        <section>
+            <h2>Gerenciar Categorias</h2>
+            <form id="categoryForm">
+                <input type="hidden" name="idCategory">
+                <input type="text" name="name" placeholder="Nome da Categoria" required style="flex-grow: 1;">
+                <button type="submit" class="btn-primary">Salvar Categoria</button>
+            </form>
+            <table id="categoriesTable">
+                <thead><tr><th>Nome</th><th>Ações</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </section>
+
+        <section>
+            <h2>Adicionar / Editar Transação</h2>
+            <form id="transactionForm">
+                <input type="hidden" name="idTransaction">
+                <input type="text" name="description" placeholder="Descrição" required style="flex-grow: 2;">
+                <input type="number" name="amount" placeholder="Valor (R$)" step="0.01" required style="flex-grow: 1;">
+                <input type="date" name="date" required style="flex-grow: 1;">
+                <select name="type" required><option value="expense">Despesa</option><option value="income">Receita</option></select>
+                <select name="idCategory" id="categorySelect" required><option value="">Carregando...</option></select>
+                <button type="submit" class="btn-primary">Salvar Transação</button>
+            </form>
+        </section>
+
+        <section>
+            <h2>Histórico de Transações</h2>
+            <table id="transactionsTable">
+                <thead><tr><th>Data</th><th>Descrição</th><th>Valor</th><th>Ações</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </section>
+    </div>
+
+<script>
+    
+    const API_URL = 'http://localhost:3000/api';
+    let csrfToken = null;
+
+    // --- ELEMENTOS DO DOM ---
+    const logoutButton = document.getElementById('logoutButton');
+    const categoryForm = document.getElementById('categoryForm');
+    const categoriesTableBody = document.querySelector('#categoriesTable tbody');
+    const transactionForm = document.getElementById('transactionForm');
+    const transactionsTableBody = document.querySelector('#transactionsTable tbody');
+    const categorySelect = document.getElementById('categorySelect');
+
+    // --- FUNÇÕES DE AUTENTICAÇÃO E INICIALIZAÇÃO ---
+    const handleLogout = () => {
+        
+        alert("Você foi deslogado.");
+        window.location.href = 'login.html';
+    };
+
+    const initializePage = async () => {
+        try {
+            const csrfResponse = await fetch(`${API_URL}/csrf-token`, { credentials: 'include' });
+            if (!csrfResponse.ok) throw new Error('Sessão inválida');
+            const csrfData = await csrfResponse.json();
+            csrfToken = csrfData.csrfToken;
+
+            await Promise.all([
+                fetchAndRenderCategories(),
+                fetchAndRenderTransactions()
+            ]);
+        } catch (error) {
+            console.error("Erro de autenticação, redirecionando para o login.", error);
+            window.location.href = 'login.html';
+        }
+    };
+
+   
+    const fetchAndRenderCategories = async () => {
+        const response = await fetch(`${API_URL}/categories`, { credentials: 'include' });
+        const categories = await response.json();
+        
+        categoriesTableBody.innerHTML = '';
+        categorySelect.innerHTML = '';
+
+        if (categories.length === 0) {
+            categoriesTableBody.innerHTML = '<tr><td colspan="2">Nenhuma categoria encontrada.</td></tr>';
+            categorySelect.innerHTML = '<option value="" disabled>Crie uma categoria</option>';
+        } else {
+            categories.forEach(cat => {
+                
+                const row = categoriesTableBody.insertRow();
+                row.innerHTML = `
+                    <td>${cat.name}</td>
+                    <td class="action-buttons">
+                        <button class="btn-warning" onclick="editCategory(${cat.idCategory}, '${cat.name}')">Editar</button>
+                        <button class="btn-danger" onclick="deleteCategory(${cat.idCategory})">Excluir</button>
+                    </td>
+                `;
+                
+                const option = document.createElement('option');
+                option.value = cat.idCategory;
+                option.textContent = cat.name;
+                categorySelect.appendChild(option);
+            });
+        }
+    };
+
+    const handleCategorySubmit = async (e) => {
+        e.preventDefault();
+        const formData = new FormData(categoryForm);
+        const id = formData.get('idCategory');
+        const name = formData.get('name');
+        const isEditing = !!id;
+
+        const url = isEditing ? `${API_URL}/categories/${id}` : `${API_URL}/categories`;
+        const method = isEditing ? 'PUT' : 'POST';
+
+        try {
+            const response = await fetch(url, {
+                method,
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                body: JSON.stringify({ name }),
+            });
+            if (!response.ok) throw new Error('Falha ao salvar categoria');
+            
+            categoryForm.reset();
+            await fetchAndRenderCategories();
+        } catch (error) {
+            alert(error.message);
+        }
+    };
+
+    const editCategory = (id, name) => {
+        categoryForm.querySelector('input[name="idCategory"]').value = id;
+        categoryForm.querySelector('input[name="name"]').value = name;
+    };
+
+    const deleteCategory = async (id) => {
+        if (!confirm('Tem certeza que deseja excluir esta categoria?')) return;
+        try {
+            const response = await fetch(`${API_URL}/categories/${id}`, {
+                method: 'DELETE',
+                credentials: 'include',
+                headers: { 'X-CSRF-Token': csrfToken },
+            });
+            if (!response.ok) throw new Error('Não foi possível excluir. Verifique se não há transações associadas.');
+            await fetchAndRenderCategories();
+        } catch (error) {
+            alert(error.message);
+        }
+    };
+
+    
+    const fetchAndRenderTransactions = async () => {
+        const response = await fetch(`${API_URL}/transactions`, { credentials: 'include' });
+        const transactions = await response.json();
+        transactionsTableBody.innerHTML = '';
+        if (transactions.length > 0) {
+            transactions.forEach(t => {
+                const row = transactionsTableBody.insertRow();
+                row.innerHTML = `
+                    <td>${new Date(t.date).toLocaleDateString()}</td>
+                    <td>${t.description}</td>
+                    <td class="${t.type}">R$ ${parseFloat(t.amount).toFixed(2)}</td>
+                    <td class="action-buttons">
+                        <button class="btn-warning" onclick='editTransaction(${JSON.stringify(t)})'>Editar</button>
+                        <button class="btn-danger" onclick="deleteTransaction(${t.idTransaction})">Excluir</button>
+                    </td>
+                `;
+            });
+        } else {
+            transactionsTableBody.innerHTML = '<tr><td colspan="4">Nenhuma transação encontrada.</td></tr>';
+        }
+    };
+
+    
+
+const handleTransactionSubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(transactionForm);
+    const data = Object.fromEntries(formData.entries());
+    const isEditing = !!data.idTransaction; // Verifica se o ID tem valor
+
+    
+    if (!isEditing) {
+        delete data.idTransaction;
+    }
+
+    const url = isEditing ? `${API_URL}/transactions/${data.idTransaction}` : `${API_URL}/transactions`;
+    const method = isEditing ? 'PUT' : 'POST';
+    
+    try {
+        const response = await fetch(url, {
+            method,
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify(data),
+        });
+            if (!response.ok) {
+            // Tenta pegar uma mensagem de erro mais específica do backend
+            const errorData = await response.json();
+            throw new Error(errorData.errors ? JSON.stringify(errorData.errors) : (errorData.error || 'Falha ao salvar transação'));
+        }
+        transactionForm.reset();
+        await fetchAndRenderTransactions();
+    } catch (error) {
+        alert(`Erro: ${error.message}`);
+    }
+};
+
+    const editTransaction = (transaction) => {
+        transactionForm.querySelector('input[name="idTransaction"]').value = transaction.idTransaction;
+        transactionForm.querySelector('input[name="description"]').value = transaction.description;
+        transactionForm.querySelector('input[name="amount"]').value = transaction.amount;
+        transactionForm.querySelector('input[name="date"]').value = transaction.date;
+        transactionForm.querySelector('select[name="type"]').value = transaction.type;
+        transactionForm.querySelector('select[name="idCategory"]').value = transaction.idCategory;
+    };
+
+    const deleteTransaction = async (id) => {
+        if (!confirm('Tem certeza que deseja excluir esta transação?')) return;
+        try {
+            const response = await fetch(`${API_URL}/transactions/${id}`, {
+                method: 'DELETE',
+                credentials: 'include',
+                headers: { 'X-CSRF-Token': csrfToken },
+            });
+            if (!response.ok) throw new Error('Falha ao excluir transação');
+            await fetchAndRenderTransactions();
+        } catch (error) {
+            alert(error.message);
+        }
+    };
+
+    // --- EVENT LISTENERS ---
+    document.addEventListener('DOMContentLoaded', initializePage);
+    logoutButton.addEventListener('click', handleLogout);
+    categoryForm.addEventListener('submit', handleCategorySubmit);
+    transactionForm.addEventListener('submit', handleTransactionSubmit);
+</script>
+</body>
+</html>
