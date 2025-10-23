@@ -48,7 +48,7 @@ app.use('/api/auth', authRoutes);
 const csrfProtection = csrf({ 
     cookie: {
         httpOnly: true,
-        secure: false, // Em produção (HTTPS), mude para 'true'
+        secure: true, // Em produção (HTTPS), mude para 'true'
         sameSite: 'strict'
     } 
 });
