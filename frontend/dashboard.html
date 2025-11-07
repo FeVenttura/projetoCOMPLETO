@@ -126,12 +126,12 @@
         const response = await fetch(`${API_URL}/categories`, { credentials: 'include' });
         const categories = await response.json();
         
-        categoriesTableBody.innerHTML = '';
-        categorySelect.innerHTML = '';
+        categoriesTableBody.innerText = '';
+        categorySelect.innerText = '';
 
         if (categories.length === 0) {
-            categoriesTableBody.innerHTML = '<tr><td colspan="2">Nenhuma categoria encontrada.</td></tr>';
-            categorySelect.innerHTML = '<option value="" disabled>Crie uma categoria</option>';
+            categoriesTableBody.innerText = '<tr><td colspan="2">Nenhuma categoria encontrada.</td></tr>';
+            categorySelect.innerText = '<option value="" disabled>Crie uma categoria</option>';
         } else {
             categories.forEach(cat => {
                 
@@ -202,11 +202,11 @@
     const fetchAndRenderTransactions = async () => {
         const response = await fetch(`${API_URL}/transactions`, { credentials: 'include' });
         const transactions = await response.json();
-        transactionsTableBody.innerHTML = '';
+        transactionsTableBody.innerText = '';
         if (transactions.length > 0) {
             transactions.forEach(t => {
                 const row = transactionsTableBody.insertRow();
-                row.innerHTML = `
+                row.innerText = `
                     <td>${new Date(t.date).toLocaleDateString()}</td>
                     <td>${t.description}</td>
                     <td class="${t.type}">R$ ${parseFloat(t.amount).toFixed(2)}</td>
